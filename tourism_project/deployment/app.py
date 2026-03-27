@@ -5,17 +5,26 @@ import joblib
 from huggingface_hub import hf_hub_download
 
 # =========================
-# Load Model from HF
+# Debug: App Start
 # =========================
-MODEL_REPO = "amarg7/tourism-model"
+st.write("✅ App started successfully")
 
-model_path = hf_hub_download(
-    repo_id=MODEL_REPO,
-    filename="tourism_model.joblib"
-)
+# =========================
+# Load Model from HF (with caching)
+# =========================
+@st.cache_resource
+def load_model():
+    model_path = hf_hub_download(
+        repo_id="amarg7/tourism-model",
+        filename="tourism_model.joblib"
+    )
+    return joblib.load(model_path)
 
-model = joblib.load(model_path)
+model = load_model()
 
+# =========================
+# UI Title
+# =========================
 st.title("🌍 Tourism Package Prediction App")
 
 st.write("Predict whether a customer will purchase the Wellness Tourism Package.")
@@ -23,7 +32,6 @@ st.write("Predict whether a customer will purchase the Wellness Tourism Package.
 # =========================
 # User Inputs
 # =========================
-
 Age = st.slider("Age", 18, 70, 30)
 NumberOfPersonVisiting = st.number_input("Number of Persons Visiting", 1, 10, 2)
 NumberOfTrips = st.number_input("Number of Trips per Year", 0, 10, 2)
@@ -76,9 +84,15 @@ input_data = pd.DataFrame([{
 # Prediction
 # =========================
 if st.button("Predict"):
-    prediction = model.predict(input_data)[0]
+    try:
+        st.write("🔍 Running prediction...")
 
-    if prediction == 1:
-        st.success("✅ Customer is likely to purchase the package!")
-    else:
-        st.error("❌ Customer is unlikely to purchase the package.")
+        prediction = model.predict(input_data)[0]
+
+        if prediction == 1:
+            st.success("✅ Customer is likely to purchase the package!")
+        else:
+            st.error("❌ Customer is unlikely to purchase the package.")
+
+    except Exception as e:
+        st.error(f"❌ Prediction failed: {e}")
