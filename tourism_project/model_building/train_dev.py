@@ -5,42 +5,33 @@
 import pandas as pd
 import os
 
+from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import GridSearchCV
 
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
-import joblib
 import mlflow
 
-from huggingface_hub import login, HfApi, create_repo
-from huggingface_hub.utils import RepositoryNotFoundError
-
 # =========================
-# Setup
+# Load Local Dataset
 # =========================
-HF_TOKEN = os.getenv("HF_TOKEN")
-login(token=HF_TOKEN)
+df = pd.read_csv("tourism_project/data/tourism.csv")
+print("Dataset loaded successfully.")
 
-api = HfApi(token=HF_TOKEN)
+df.drop(columns=['CustomerID'], inplace=True)
 
-mlflow.set_tracking_uri("http://localhost:5000")
-mlflow.set_experiment("tourism-prod")
+target_col = "ProdTaken"
 
-# =========================
-# Load HF Train/Test (IMPORTANT)
-# =========================
-repo_id = "amarg7/tourism-predict"
+X = df.drop(columns=[target_col])
+y = df[target_col]
 
-Xtrain = pd.read_csv(f"hf://datasets/{repo_id}/Xtrain.csv")
-Xtest = pd.read_csv(f"hf://datasets/{repo_id}/Xtest.csv")
-ytrain = pd.read_csv(f"hf://datasets/{repo_id}/ytrain.csv").values.ravel()
-ytest = pd.read_csv(f"hf://datasets/{repo_id}/ytest.csv").values.ravel()
-
-print("HF data loaded")
+# Split
+Xtrain, Xtest, ytrain, ytest = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
 
 # =========================
 # Features
@@ -59,7 +50,7 @@ categorical_features = [
 binary_features = ['Passport', 'OwnCar', 'CityTier', 'PreferredPropertyStar']
 
 # =========================
-# Pipeline (CRITICAL FIX)
+# Pipeline
 # =========================
 preprocessor = make_column_transformer(
     (StandardScaler(), numeric_features),
@@ -81,8 +72,10 @@ param_grid = {
 }
 
 # =========================
-# Training
+# MLflow
 # =========================
+mlflow.set_experiment("tourism-dev")
+
 with mlflow.start_run():
 
     grid = GridSearchCV(pipeline, param_grid, cv=3, scoring='f1', n_jobs=-1)
@@ -100,27 +93,4 @@ with mlflow.start_run():
         "roc_auc": roc_auc_score(ytest, y_prob)
     })
 
-    # =========================
-    # Save Model
-    # =========================
-    model_path = "tourism_model.joblib"
-    joblib.dump(best_model, model_path)
-
-    # =========================
-    # Upload Model
-    # =========================
-    model_repo = "amarg7/tourism-model"
-
-    try:
-        api.repo_info(repo_id=model_repo, repo_type="model")
-    except RepositoryNotFoundError:
-        create_repo(repo_id=model_repo, repo_type="model", private=False)
-
-    api.upload_file(
-        path_or_fileobj=model_path,
-        path_in_repo=model_path,
-        repo_id=model_repo,
-        repo_type="model"
-    )
-
-    print("PROD model uploaded")
+    print("DEV Training Complete")
