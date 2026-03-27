@@ -15,6 +15,7 @@ from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
 
 import joblib
 import mlflow
+import mlflow.sklearn
 
 from huggingface_hub import login, HfApi, create_repo
 from huggingface_hub.utils import RepositoryNotFoundError
@@ -41,6 +42,14 @@ ytrain = pd.read_csv(f"hf://datasets/{repo_id}/ytrain.csv").values.ravel()
 ytest = pd.read_csv(f"hf://datasets/{repo_id}/ytest.csv").values.ravel()
 
 print("HF data loaded")
+# Handling Class imbalance
+classes = np.unique(ytrain)
+weights = compute_class_weight(class_weight='balanced', classes=classes, y=ytrain)
+
+class_weights = dict(zip(classes, weights))
+
+scale_pos_weight = class_weights[1] / class_weights[0]
+
 
 # =========================
 # Features
@@ -67,7 +76,7 @@ preprocessor = make_column_transformer(
     ("passthrough", binary_features)
 )
 
-model = xgb.XGBClassifier(random_state=42, n_jobs=-1, eval_metric='logloss')
+model = xgb.XGBClassifier(random_state=42, n_jobs=-1, eval_metric='logloss', scale_pos_weight=scale_pos_weight)
 
 pipeline = make_pipeline(preprocessor, model)
 
@@ -143,4 +152,5 @@ with mlflow.start_run():
         repo_type="model"
     )
 
+mlflow.sklearn.log_model(best_model, "model")
 print("PROD model uploaded")
