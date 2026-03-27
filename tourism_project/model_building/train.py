@@ -31,7 +31,7 @@ mlflow.set_tracking_uri("http://localhost:5000")
 mlflow.set_experiment("tourism-prod")
 
 # =========================
-# Load HF Train/Test (IMPORTANT)
+# Load HF Train/Test
 # =========================
 repo_id = "amarg7/tourism-predict"
 
@@ -59,7 +59,7 @@ categorical_features = [
 binary_features = ['Passport', 'OwnCar', 'CityTier', 'PreferredPropertyStar']
 
 # =========================
-# Pipeline (CRITICAL FIX)
+# Pipeline
 # =========================
 preprocessor = make_column_transformer(
     (StandardScaler(), numeric_features),
@@ -77,7 +77,9 @@ pipeline = make_pipeline(preprocessor, model)
 param_grid = {
     'xgbclassifier__n_estimators': [100, 200],
     'xgbclassifier__max_depth': [3, 5],
-    'xgbclassifier__learning_rate': [0.01, 0.1]
+    'xgbclassifier__learning_rate': [0.01, 0.1],
+    'xgbclassifier__subsample': [0.7, 0.8],
+    'xgbclassifier__colsample_bytree': [0.7, 0.8]
 }
 
 # =========================
@@ -88,16 +90,34 @@ with mlflow.start_run():
     grid = GridSearchCV(pipeline, param_grid, cv=3, scoring='f1', n_jobs=-1)
     grid.fit(Xtrain, ytrain)
 
+    # =========================
+    # Log ALL parameter combinations
+    # =========================
+    results = grid.cv_results_
+
+    for i in range(len(results['params'])):
+        with mlflow.start_run(nested=True):
+            mlflow.log_params(results['params'][i])
+            mlflow.log_metric("mean_test_score", results['mean_test_score'][i])
+
+    # =========================
+    # Best Model
+    # =========================
     best_model = grid.best_estimator_
-
-    y_pred = best_model.predict(Xtest)
-    y_prob = best_model.predict_proba(Xtest)[:, 1]
-
     mlflow.log_params(grid.best_params_)
+
+    # Predictions
+    y_pred_train = best_model.predict(Xtrain)
+    y_pred_test = best_model.predict(Xtest)
+    y_prob_test = best_model.predict_proba(Xtest)[:, 1]
+
+    # Metrics
     mlflow.log_metrics({
-        "accuracy": accuracy_score(ytest, y_pred),
-        "f1": f1_score(ytest, y_pred),
-        "roc_auc": roc_auc_score(ytest, y_prob)
+        "train_accuracy": accuracy_score(ytrain, y_pred_train),
+        "test_accuracy": accuracy_score(ytest, y_pred_test),
+        "train_f1": f1_score(ytrain, y_pred_train),
+        "test_f1": f1_score(ytest, y_pred_test),
+        "test_roc_auc": roc_auc_score(ytest, y_prob_test)
     })
 
     # =========================
@@ -123,4 +143,4 @@ with mlflow.start_run():
         repo_type="model"
     )
 
-    print("PROD model uploaded")
+print("PROD model uploaded")
