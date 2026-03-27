@@ -33,11 +33,11 @@ categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
 
 # Numerical → median
 for col in numeric_cols:
-    df[col].fillna(df[col].median(), inplace=True)
+    df[col] = df[col].fillna(df[col].median())
 
 # Categorical → mode
 for col in categorical_cols:
-    df[col].fillna(df[col].mode()[0], inplace=True)
+    df[col] = df[col].fillna(df[col].mode()[0])
 
 # =========================
 # Split

@@ -10,6 +10,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
 from sklearn.model_selection import GridSearchCV
+from sklearn.utils.class_weight import compute_class_weight
 
 import xgboost as xgb
 from sklearn.metrics import accuracy_score, f1_score, roc_auc_score
