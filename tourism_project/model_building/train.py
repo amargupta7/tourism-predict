@@ -5,10 +5,10 @@
 import pandas as pd
 import os
 
-from sklearn.model_selection import train_test_split, GridSearchCV
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import GridSearchCV
 
 import xgboost as xgb
 
@@ -37,33 +37,16 @@ login(token=HF_TOKEN)
 api = HfApi(token=HF_TOKEN)
 
 # =========================
-# Load RAW Dataset from HF
+# Load Train/Test from HF
 # =========================
 repo_id = "amarg7/tourism-predict"
 
-df = pd.read_csv(f"hf://datasets/{repo_id}/tourism.csv")
+Xtrain = pd.read_csv(f"hf://datasets/{repo_id}/Xtrain.csv")
+Xtest = pd.read_csv(f"hf://datasets/{repo_id}/Xtest.csv")
+ytrain = pd.read_csv(f"hf://datasets/{repo_id}/ytrain.csv").values.ravel()
+ytest = pd.read_csv(f"hf://datasets/{repo_id}/ytest.csv").values.ravel()
 
-print("Dataset loaded from Hugging Face.")
-
-# =========================
-# Drop unnecessary column
-# =========================
-df.drop(columns=['CustomerID'], inplace=True)
-
-# =========================
-# Define target
-# =========================
-target_col = "ProdTaken"
-
-X = df.drop(columns=[target_col])
-y = df[target_col]
-
-# =========================
-# Train-test split
-# =========================
-Xtrain, Xtest, ytrain, ytest = train_test_split(
-    X, y, test_size=0.2, random_state=42, stratify=y
-)
+print("Train-test data loaded from Hugging Face.")
 
 # =========================
 # Feature Groups
@@ -74,22 +57,20 @@ numeric_features = [
     'PitchSatisfactionScore', 'NumberOfFollowups', 'DurationOfPitch'
 ]
 
-categorical_features = [
-    'TypeofContact', 'Occupation', 'Gender',
-    'MaritalStatus', 'Designation', 'ProductPitched'
-]
+binary_features = ['Passport', 'OwnCar']
 
-binary_features = [
-    'Passport', 'OwnCar', 'CityTier', 'PreferredPropertyStar'
+categorical_features = [
+    col for col in Xtrain.columns
+    if col not in numeric_features + binary_features
 ]
 
 # =========================
-# Preprocessing Pipeline
+# Preprocessor
 # =========================
 preprocessor = make_column_transformer(
     (StandardScaler(), numeric_features),
-    (OneHotEncoder(handle_unknown='ignore'), categorical_features),
-    ("passthrough", binary_features)
+    ("passthrough", binary_features),
+    ("passthrough", categorical_features)
 )
 
 # =========================
