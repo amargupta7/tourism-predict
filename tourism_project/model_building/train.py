@@ -5,10 +5,10 @@
 import pandas as pd
 import os
 
-from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import make_column_transformer
 from sklearn.pipeline import make_pipeline
-from sklearn.model_selection import GridSearchCV
 
 import xgboost as xgb
 
@@ -29,7 +29,7 @@ mlflow.set_tracking_uri("http://localhost:5000")
 mlflow.set_experiment("tourism-training-experiment")
 
 # =========================
-# Hugging Face Login (FIX)
+# Hugging Face Login
 # =========================
 HF_TOKEN = os.getenv("HF_TOKEN")
 login(token=HF_TOKEN)
@@ -37,16 +37,33 @@ login(token=HF_TOKEN)
 api = HfApi(token=HF_TOKEN)
 
 # =========================
-# Load Data from HF Dataset
+# Load RAW Dataset from HF
 # =========================
 repo_id = "amarg7/tourism-predict"
 
-Xtrain = pd.read_csv(f"hf://datasets/{repo_id}/Xtrain.csv")
-Xtest = pd.read_csv(f"hf://datasets/{repo_id}/Xtest.csv")
-ytrain = pd.read_csv(f"hf://datasets/{repo_id}/ytrain.csv").values.ravel()
-ytest = pd.read_csv(f"hf://datasets/{repo_id}/ytest.csv").values.ravel()
+df = pd.read_csv(f"hf://datasets/{repo_id}/tourism.csv")
 
 print("Dataset loaded from Hugging Face.")
+
+# =========================
+# Drop unnecessary column
+# =========================
+df.drop(columns=['CustomerID'], inplace=True)
+
+# =========================
+# Define target
+# =========================
+target_col = "ProdTaken"
+
+X = df.drop(columns=[target_col])
+y = df[target_col]
+
+# =========================
+# Train-test split
+# =========================
+Xtrain, Xtest, ytrain, ytest = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
 
 # =========================
 # Feature Groups
@@ -57,24 +74,26 @@ numeric_features = [
     'PitchSatisfactionScore', 'NumberOfFollowups', 'DurationOfPitch'
 ]
 
-binary_features = ['Passport', 'OwnCar']
-
 categorical_features = [
-    col for col in Xtrain.columns
-    if col not in numeric_features + binary_features
+    'TypeofContact', 'Occupation', 'Gender',
+    'MaritalStatus', 'Designation', 'ProductPitched'
+]
+
+binary_features = [
+    'Passport', 'OwnCar', 'CityTier', 'PreferredPropertyStar'
 ]
 
 # =========================
-# Preprocessor
+# Preprocessing Pipeline
 # =========================
 preprocessor = make_column_transformer(
     (StandardScaler(), numeric_features),
-    ("passthrough", binary_features),
-    ("passthrough", categorical_features)
+    (OneHotEncoder(handle_unknown='ignore'), categorical_features),
+    ("passthrough", binary_features)
 )
 
 # =========================
-# Model (Classification)
+# Model
 # =========================
 xgb_model = xgb.XGBClassifier(
     random_state=42,
@@ -113,7 +132,7 @@ with mlflow.start_run():
 
     grid_search.fit(Xtrain, ytrain)
 
-    # Log all parameter sets
+    # Log all parameter combinations
     results = grid_search.cv_results_
 
     for i in range(len(results['params'])):
@@ -125,12 +144,16 @@ with mlflow.start_run():
     best_model = grid_search.best_estimator_
     mlflow.log_params(grid_search.best_params_)
 
+    # =========================
     # Predictions
+    # =========================
     y_pred_train = best_model.predict(Xtrain)
     y_pred_test = best_model.predict(Xtest)
     y_prob_test = best_model.predict_proba(Xtest)[:, 1]
 
+    # =========================
     # Metrics
+    # =========================
     mlflow.log_metrics({
         "train_accuracy": accuracy_score(ytrain, y_pred_train),
         "test_accuracy": accuracy_score(ytest, y_pred_test),
