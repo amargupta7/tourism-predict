@@ -2,7 +2,6 @@ from huggingface_hub.utils import RepositoryNotFoundError, HfHubHTTPError
 from huggingface_hub import HfApi, create_repo
 import os
 
-
 repo_id = "amarg7/tourism-predict"
 repo_type = "dataset"
 
