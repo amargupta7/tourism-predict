@@ -7,7 +7,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 api = HfApi(token=HF_TOKEN)
 
-repo_id = "amarg7/tourism-pred-app"
+repo_id = "amarg7/tour-pred"
 repo_type = "space"
 
 # Check if Space exists
@@ -16,7 +16,7 @@ try:
     print(f"Space '{repo_id}' already exists.")
 except RepositoryNotFoundError:
     print(f"Creating Space '{repo_id}'...")
-    create_repo(repo_id=repo_id, repo_type=repo_type, space_sdk="streamlit", private=False)
+    create_repo(repo_id=repo_id, repo_type=repo_type, space_sdk="docker", private=False)
 
 # Upload deployment folder
 api.upload_folder(
