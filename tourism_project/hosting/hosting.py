@@ -7,7 +7,7 @@ HF_TOKEN = os.getenv("HF_TOKEN")
 
 api = HfApi(token=HF_TOKEN)
 
-repo_id = "amarg7/tourism-app"
+repo_id = "amarg7/tourism-pred-app"
 repo_type = "space"
 
 # Check if Space exists
